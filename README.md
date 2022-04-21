@@ -1,12 +1,14 @@
-# node-red-contrib-socketio-javis86
+# node-red-contrib-socketio-ack
 Implementation for [Node-RED](https://nodered.org/) of the popular [Socket.IO](http://socket.io/).
 
-from original project node-red-contrib-socketio
+from original project node-red-contrib-socketio, forked from node-red-contrib-socketio-javis86 to include CORS support.
+
+Note: This node-red library is not functionally compatable with the above mentioned packages. The socketio - in and socketio - out node pass an array object for socketio arguments (the previous libraries only supported a single argument). Additionally, the socket - in node will return an optional msg.callback function if the client requested an acknowledge. It is the responsibility of your node-red flows to respond to this acknowledgement by calling the msg.callback function.
 
 ## Installation
 To install node-red-contrib-socketio use this command
 
-`npm i node-red-contrib-socketio-javis86`
+`npm i node-red-contrib-socketio-ack`
 
 ## Composition
 The Socket.IO implementation is made with
@@ -29,5 +31,6 @@ Thank to:
 * @essuraj for implementig rooms listing node
 * @cazellap for pushong adding compatibility to socketIO 3.0
 * @javis86 individual contributor for fixing node-red hangs when deploy flows
+* @javis86 for adding CORS support
 
 

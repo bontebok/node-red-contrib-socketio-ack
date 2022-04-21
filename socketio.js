@@ -14,7 +14,7 @@ module.exports = function(RED) {
     this.port = n.port || 80;
     this.sendClient = n.sendClient;
     this.path = n.path || "/socket.io";
-    this.bindToNode = n.bindToNode || false;    
+    this.bindToNode = n.bindToNode || false;
     this.corsOrigins = n.corsOrigins || "*";
     this.corsMethods = n.corsMethods.toUpperCase().split(",") || "GET,POST";
     this.enableCors = n.enableCors || false;
@@ -24,7 +24,7 @@ module.exports = function(RED) {
     node.log("socketIoConfig - CORS METHODS " + JSON.stringify(this.enableCors));
 
     let corsOptions = {};
-    
+
     if (this.enableCors) {
       corsOptions = {
         cors: {
@@ -34,11 +34,11 @@ module.exports = function(RED) {
       };
     }
 
-    if (this.bindToNode) {      
+    if (this.bindToNode) {
       io = new Server(RED.server, corsOptions);
-    } else {            
+    } else {
       io = new Server(corsOptions);
-      
+
       io.serveClient(node.sendClient);
       io.path(node.path);
       io.listen(node.port);
@@ -78,7 +78,7 @@ module.exports = function(RED) {
 	  { v: "reconnect" },
 	  { v: "reconnect_error" },
 	  { v: "reconnect_failed" },
-	  
+
 	  // Events emitted by the Socket:
       { v: "connect" },
 	  { v: "connect_error" },
@@ -86,9 +86,15 @@ module.exports = function(RED) {
     ];
 
     function addListener(socket, val, i) {
-      socket.on(val.v, function(msgin) {
+      socket.on(val.v, function(...msgin) {
         var msg = {};
-        RED.util.setMessageProperty(msg, "payload", msgin, true);
+        if ((msgin.length > 0) && (typeof(msgin[msgin.length - 1]) === 'function')) {
+            RED.util.setMessageProperty(msg, "callback", msgin[msgin.length - 1], true);
+            RED.util.setMessageProperty(msg, "payload", msgin.slice(0,-1), true);
+        }
+        else
+          RED.util.setMessageProperty(msg, "payload", msgin, true);
+
         RED.util.setMessageProperty(msg, "socketIOEvent", val.v, true);
         RED.util.setMessageProperty(msg, "socketIOId", socket.id, true);
         if (
@@ -125,6 +131,7 @@ module.exports = function(RED) {
     this.server = RED.nodes.getNode(n.server);
 
     node.on("input", function(msg) {
+
       //check if we need to add properties
       if (RED.util.getMessageProperty(msg, "socketIOAddStaticProperties")) {
         //check if we have already added some properties for this socket
@@ -152,37 +159,32 @@ module.exports = function(RED) {
         }
       }
 
-	
+
       switch (RED.util.getMessageProperty(msg, "socketIOEmit")) {
         case "broadcast.emit":
           //Return to all but the caller
-          if (
-            io.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))
-          ) {
-            io.sockets.sockets.get(
-              RED.util.getMessageProperty(msg, "socketIOId")
-            ).broadcast.emit(msg.socketIOEvent, msg.payload);
+          if (io.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
+            io.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId")).broadcast.emit(
+              msg.socketIOEvent, ...(msg.payload instanceof Array) ? msg.payload : [msg.payload]);
+
           }
           break;
         case "emit":
           //Return only to the caller
-          if (
-            io.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))
-          ) {
-            io.sockets.sockets.get(
-              RED.util.getMessageProperty(msg, "socketIOId")
-            ).emit(msg.socketIOEvent, msg.payload);
+          if (io.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
+            io.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId")).emit(
+              msg.socketIOEvent, ...(msg.payload instanceof Array) ? msg.payload : [msg.payload]);
           }
           break;
         case "room":
           //emit to all
           if (msg.room) {
-            io.to(msg.room).emit(msg.socketIOEvent, msg.payload);
+            io.to(msg.room).emit(msg.socketIOEvent, ...(msg.payload instanceof Array) ? msg.payload : [msg.payload]);
           }
           break;
         default:
           //emit to all
-          io.emit(msg.socketIOEvent, msg.payload);
+            io.emit(msg.socketIOEvent, ...(msg.payload instanceof Array) ? msg.payload : [msg.payload]);
       }
     });
   }
@@ -202,7 +204,7 @@ module.exports = function(RED) {
       }
     });
   }
-  
+
   function socketIoRooms(n) {
     RED.nodes.createNode(this, n);
     var node = this;
@@ -213,7 +215,7 @@ module.exports = function(RED) {
       node.send({ payload: io.sockets.adapter.rooms });
     });
   }
-  
+
   function socketIoLeave(n) {
     RED.nodes.createNode(this, n);
     var node = this;

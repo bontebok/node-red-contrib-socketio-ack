@@ -1,12 +1,34 @@
-/**
- * Copyright Gallimberti Telemaco 02/02/2017
- **/
-
 module.exports = function(RED) {
   const { Server } = require("socket.io");
-  var io;
+  var io = {};
   var customProperties = {};
-  var sockets = [];
+
+  function addListener(node, socket, val, i) {
+    socket.on(val, function(...msgin) {
+      var msg = {};
+      if ((msgin.length > 0) && (typeof(msgin[msgin.length - 1]) === 'function')) {
+          RED.util.setMessageProperty(msg, "callback", msgin[msgin.length - 1], true);
+          RED.util.setMessageProperty(msg, "payload", msgin.slice(0,-1), true);
+      }
+      else
+        RED.util.setMessageProperty(msg, "payload", msgin, true);
+
+      RED.util.setMessageProperty(msg, "socketIOEvent", val, true);
+      RED.util.setMessageProperty(msg, "socketIOId", socket.id, true);
+      if (
+        customProperties[RED.util.getMessageProperty(msg, "socketIOId")] !=
+        null
+      ) {
+        RED.util.setMessageProperty(
+          msg,
+          "socketIOStaticProperties",
+          customProperties[RED.util.getMessageProperty(msg, "socketIOId")],
+          true
+        );
+      }
+      node.send(msg);
+    });
+  }
 
   function socketIoConfig(n) {
     RED.nodes.createNode(this, n);
@@ -35,13 +57,14 @@ module.exports = function(RED) {
     }
 
     if (this.bindToNode) {
-      io = new Server(RED.server, corsOptions);
-    } else {
-      io = new Server(corsOptions);
+      io[node.id] = {server: new Server(RED.server, corsOptions), sockets: {}};
 
-      io.serveClient(node.sendClient);
-      io.path(node.path);
-      io.listen(node.port);
+    } else {
+      io[node.id] = {server: new Server(corsOptions), sockets: {}};
+
+      io[node.id].server.serveClient(node.sendClient);
+      io[node.id].server.path(node.path);
+      io[node.id].server.listen(node.port);
     }
     var bindOn = this.bindToNode
       ? "bind to Node-red port"
@@ -50,13 +73,14 @@ module.exports = function(RED) {
 
     node.on("close", function() {
       if (!this.bindToNode) {
-        io.close();
+        io[node.id].server.close();
       }
-      sockets.forEach(function (socket) {
-        node.log('disconnect:' + socket.id);
-        socket.disconnect(true);
-      });
-      sockets = [];
+      for (let socket in io[node.id].sockets) {
+        node.log('disconnect: ') + socket;
+        io[node.id].sockets[socket].disconnect(true);
+      }
+
+      io[node.id].sockets = {};
     });
   }
 
@@ -66,60 +90,14 @@ module.exports = function(RED) {
     this.name = n.name;
     this.server = RED.nodes.getNode(n.server);
     this.rules = n.rules || [];
+    this.io = io[n.server];
 
-    this.specialIOEvent = [
-	// Events emitted by the Manager:
-      { v: "open" },
-      { v: "error" },
-	  { v: "close" },
-	  { v: "ping" },
-	  { v: "packet" },
-	  { v: "reconnect_attempt" },
-	  { v: "reconnect" },
-	  { v: "reconnect_error" },
-	  { v: "reconnect_failed" },
-
-	  // Events emitted by the Socket:
-      { v: "connect" },
-	  { v: "connect_error" },
-      { v: "disconnect" }
-    ];
-
-    function addListener(socket, val, i) {
-      socket.on(val.v, function(...msgin) {
-        var msg = {};
-        if ((msgin.length > 0) && (typeof(msgin[msgin.length - 1]) === 'function')) {
-            RED.util.setMessageProperty(msg, "callback", msgin[msgin.length - 1], true);
-            RED.util.setMessageProperty(msg, "payload", msgin.slice(0,-1), true);
-        }
-        else
-          RED.util.setMessageProperty(msg, "payload", msgin, true);
-
-        RED.util.setMessageProperty(msg, "socketIOEvent", val.v, true);
-        RED.util.setMessageProperty(msg, "socketIOId", socket.id, true);
-        if (
-          customProperties[RED.util.getMessageProperty(msg, "socketIOId")] !=
-          null
-        ) {
-          RED.util.setMessageProperty(
-            msg,
-            "socketIOStaticProperties",
-            customProperties[RED.util.getMessageProperty(msg, "socketIOId")],
-            true
-          );
-        }
-        node.send(msg);
-      });
-    }
-
-    io.on("connection", function(socket) {
-      sockets.push(socket);
+    this.io.server.on("connection", (socket) => {
+      //console.log(socket.id);
+      //console.log(this.io.sockets);
+      this.io.sockets[socket.id] = socket;
       node.rules.forEach(function(val, i) {
-        addListener(socket, val, i);
-      });
-      //Adding support for all other special messages
-      node.specialIOEvent.forEach(function(val, i) {
-        addListener(socket, val, i);
+        addListener(node, socket, val.v, i);
       });
     });
   }
@@ -129,9 +107,16 @@ module.exports = function(RED) {
     var node = this;
     this.name = n.name;
     this.server = RED.nodes.getNode(n.server);
+    this.io = io[n.server];
 
     node.on("input", function(msg) {
-
+      this.payload = (msg.payload instanceof Array) ? msg.payload : [msg.payload];
+      if (n.callback) {
+        this.payload.push((callback) => {
+          RED.util.setMessageProperty(msg, "payload", callback, true)
+          node.send(msg);
+        })
+      }
       //check if we need to add properties
       if (RED.util.getMessageProperty(msg, "socketIOAddStaticProperties")) {
         //check if we have already added some properties for this socket
@@ -159,45 +144,70 @@ module.exports = function(RED) {
         }
       }
 
-
       switch (RED.util.getMessageProperty(msg, "socketIOEmit")) {
         case "broadcast.emit":
           //Return to all but the caller
-          if (io.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
-            io.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId")).broadcast.emit(
-              msg.socketIOEvent, ...(msg.payload instanceof Array) ? msg.payload : [msg.payload]);
+          if (this.io.server.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
+            this.io.server.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId")).broadcast.emit(
+              msg.socketIOEvent, ...this.payload);
 
           }
           break;
         case "emit":
           //Return only to the caller
-          if (io.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
-            io.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId")).emit(
-              msg.socketIOEvent, ...(msg.payload instanceof Array) ? msg.payload : [msg.payload]);
+          if (this.io.server.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
+            this.io.server.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId")).emit(
+              msg.socketIOEvent, ...this.payload);
           }
           break;
         case "room":
           //emit to all
           if (msg.room) {
-            io.to(msg.room).emit(msg.socketIOEvent, ...(msg.payload instanceof Array) ? msg.payload : [msg.payload]);
+            this.io.server.to(msg.room).emit(msg.socketIOEvent, ...this.payload);
           }
           break;
         default:
           //emit to all
-            io.emit(msg.socketIOEvent, ...(msg.payload instanceof Array) ? msg.payload : [msg.payload]);
+            this.io.server.emit(msg.socketIOEvent, ...this.payload);
       }
     });
   }
+
+  function socketIoEvents(n) {
+    RED.nodes.createNode(this, n);
+    var node = this;
+    this.server = RED.nodes.getNode(n.server);
+    this.io = io[n.server];
+
+    this.io.server.on("connection", (socket) => {
+      let msg = {};
+      node.status({ fill: 'green', shape: 'dot', text: this.io.server.sockets.sockets.size + ' connected' });
+      RED.util.setMessageProperty(msg, "socketIOEvent", "connected", true);
+      RED.util.setMessageProperty(msg, "socketIOId", socket.id, true);
+      node.send(msg);
+      socket.on("disconnect", (reason) => {
+        if (this.io.server.sockets.sockets.size)
+          node.status({ fill: 'green', shape: 'dot', text: this.io.server.sockets.sockets.size + ' connected' });
+        else {
+          node.status({ fill: 'red', shape: 'dot', text: this.io.server.sockets.sockets.size + ' connected' });
+        }
+        RED.util.setMessageProperty(msg, "socketIOEvent", "disconnected", true);
+        node.send(msg);
+      });
+    });
+  }
+
 
   function socketIoJoin(n) {
     RED.nodes.createNode(this, n);
     var node = this;
     this.name = n.name;
     this.server = RED.nodes.getNode(n.server);
+    this.io = io[n.server];
 
     node.on("input", function(msg) {
-      if (io.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
-        io.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId")).join(
+      if (io.server.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
+        io.server.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId")).join(
           msg.payload.room
         );
         node.send(msg);
@@ -210,9 +220,10 @@ module.exports = function(RED) {
     var node = this;
     this.name = n.name;
     this.server = RED.nodes.getNode(n.server);
+    this.io = io[n.server];
 
     node.on("input", function(msg) {
-      node.send({ payload: io.sockets.adapter.rooms });
+      node.send({ payload: this.io.server.sockets.adapter.rooms });
     });
   }
 
@@ -221,20 +232,23 @@ module.exports = function(RED) {
     var node = this;
     this.name = n.name;
     this.server = RED.nodes.getNode(n.server);
+    this.io = io[n.server];
 
     node.on("input", function(msg) {
-      if (io.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
-        io.sockets.sockets.get(
+      if (this.io.server.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
+        this.io.server.sockets.sockets.get(
           RED.util.getMessageProperty(msg, "socketIOId")
         ).leave(msg.payload.room);
       }
     });
   }
 
-  RED.nodes.registerType("socketio-config", socketIoConfig);
-  RED.nodes.registerType("socketio-in", socketIoIn);
-  RED.nodes.registerType("socketio-out", socketIoOut);
-  RED.nodes.registerType("socketio-join", socketIoJoin);
-  RED.nodes.registerType("socketio-rooms", socketIoRooms);
-  RED.nodes.registerType("socketio-leave", socketIoLeave);
+  RED.nodes.registerType("socketio-server-config", socketIoConfig);
+  RED.nodes.registerType("socketio-server-in", socketIoIn);
+  RED.nodes.registerType("socketio-server-out", socketIoOut);
+  RED.nodes.registerType("socketio-server-callback", socketIoOut);
+  RED.nodes.registerType("socketio-server-events", socketIoEvents);
+  RED.nodes.registerType("socketio-server-join", socketIoJoin);
+  RED.nodes.registerType("socketio-server-rooms", socketIoRooms);
+  RED.nodes.registerType("socketio-server-leave", socketIoLeave);
 };

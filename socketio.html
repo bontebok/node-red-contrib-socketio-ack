@@ -79,6 +79,7 @@
         defaults: {
             name: { value: "" },
             server: { value: "", required: true, type: "socketio-server-config" },
+            namespace: { value: "" },
             rules: { value: [{ v: "" }] }
         },
         inputs: 0,
@@ -124,17 +125,21 @@
 </script>
 
 <script type="text/x-red" data-template-name="socketio-server-in">
-    <div class="form-row">
-        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-        <input type="text" id="node-input-name" placeholder="Name">
-    </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name">
+  </div>
 	<div class="form-row">
-        <label for="node-input-server"><i class="fa fa-tag"></i> Server</label>
-        <input type="text" id="node-input-server">
-    </div>
+    <label for="node-input-server"><i class="fa fa-tag"></i> Server</label>
+    <input type="text" id="node-input-server">
+  </div>
+  <div class="form-row">
+    <label for="node-input-namespace"><i class="fa fa-tag"></i> Namespace</label>
+    <input type="text" id="node-input-namespace" placeholder="Namespace">
+  </div>
 	<div class="form-row node-input-rule-container-row">
-        <ol id="node-input-rule-container"></ol>
-    </div>
+    <ol id="node-input-rule-container"></ol>
+  </div>
 </script>
 
 <script type="text/x-red" data-help-name="socketio-server-in">
@@ -160,6 +165,7 @@
         defaults: {
             name: { value: "" },
             server: { value: "", required: true, type: "socketio-server-config" },
+            namespace: { value: "" },
             callback: { value: false }
         },
         inputs: 1,
@@ -180,6 +186,10 @@
 	<div class="form-row">
         <label for="node-input-server"><i class="fa fa-tag"></i> Server</label>
         <input type="text" id="node-input-server">
+    </div>
+    <div class="form-row">
+        <label for="node-input-namespace"><i class="fa fa-tag"></i> Namespace</label>
+        <input type="text" id="node-input-namespace" placeholder="Namespace">
     </div>
 </script>
 
@@ -215,6 +225,7 @@
       defaults: {
         name: { value: "" },
         server: { value: "", type: "socketio-server-config" },
+        namespace: { value: "" },
         callback: { value: true }
       },
       label: function() {
@@ -231,6 +242,10 @@
     <div class="form-row">
       <label for="node-input-server"><i class="fa fa-tag"></i> Server</label>
       <input type="text" id="node-input-server">
+    </div>
+    <div class="form-row">
+      <label for="node-input-namespace"><i class="fa fa-tag"></i> Namespace</label>
+      <input type="text" id="node-input-namespace" placeholder="Namespace">
     </div>
   </script>
 
@@ -254,7 +269,8 @@
       paletteLabel: "Events",
       defaults: {
         name: { value: "" },
-        server: { value: "", type: "socketio-server-config" }
+        server: { value: "", type: "socketio-server-config" },
+        namespace: { value: "" }
       },
       label: function() {
           return ( this.name || "Socket.IO Events" );
@@ -271,6 +287,10 @@
       <label for="node-input-server"><i class="fa fa-tag"></i> Server</label>
       <input type="text" id="node-input-server">
     </div>
+    <div class="form-row">
+      <label for="node-input-namespace"><i class="fa fa-tag"></i> Namespace</label>
+      <input type="text" id="node-input-namespace" placeholder="Namespace">
+    </div>
   </script>
 
   <script type="text/x-red" data-help-name="socketio-server-events">
@@ -281,8 +301,6 @@
   </script>
 
 
-
-
 <!-- node socketIO join, join a room-->
 <script type="text/javascript">
     RED.nodes.registerType('socketio-server-join', {
@@ -290,7 +308,8 @@
         color: "rgb(0, 230, 184)",
         defaults: {
             name: { value: "" },
-            server: { value: "", required: true, type: "socketio-server-config" }
+            server: { value: "", required: true, type: "socketio-server-config" },
+            namespace: { value: "" }
         },
         inputs: 1,
         outputs: 0,
@@ -303,14 +322,18 @@
 </script>
 
 <script type="text/x-red" data-template-name="socketio-server-join">
-    <div class="form-row">
-        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-        <input type="text" id="node-input-name" placeholder="Name">
-    </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name">
+  </div>
 	<div class="form-row">
-        <label for="node-input-server"><i class="fa fa-tag"></i> Server</label>
-        <input type="text" id="node-input-server">
-    </div>
+    <label for="node-input-server"><i class="fa fa-tag"></i> Server</label>
+    <input type="text" id="node-input-server">
+  </div>
+  <div class="form-row">
+    <label for="node-input-namespace"><i class="fa fa-tag"></i> Namespace</label>
+    <input type="text" id="node-input-namespace" placeholder="Namespace">
+  </div>
 </script>
 
 <script type="text/x-red" data-help-name="socketio-server-join">
@@ -330,7 +353,8 @@
         color: "rgb(0, 230, 184)",
         defaults: {
             name: { value: "" },
-            server: { value: "", required: true, type: "socketio-server-config" }
+            server: { value: "", required: true, type: "socketio-server-config" },
+            namespace: { value: "" }
         },
         inputs: 1,
         outputs: 0,
@@ -343,14 +367,18 @@
 </script>
 
 <script type="text/x-red" data-template-name="socketio-server-leave">
-    <div class="form-row">
-        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-        <input type="text" id="node-input-name" placeholder="Name">
-    </div>
-	<div class="form-row">
-        <label for="node-input-server"><i class="fa fa-tag"></i> Server</label>
-        <input type="text" id="node-input-server">
-    </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+  <div class="form-row">
+    <label for="node-input-server"><i class="fa fa-tag"></i> Server</label>
+    <input type="text" id="node-input-server">
+  </div>
+  <div class="form-row">
+    <label for="node-input-namespace"><i class="fa fa-tag"></i> Namespace</label>
+    <input type="text" id="node-input-namespace" placeholder="Namespace">
+  </div>
 </script>
 
 <script type="text/x-red" data-help-name="socketio-server-leave">
@@ -369,7 +397,8 @@
         color: "rgb(0, 230, 184)",
         defaults: {
             name: { value: "" },
-            server: { value: "", required: true, type: "socketio-server-config" }
+            server: { value: "", required: true, type: "socketio-server-config" },
+            namespace: { value: "" }
         },
         inputs: 1,
         outputs: 1,
@@ -384,15 +413,18 @@
 
 
 <script type="text/x-red" data-template-name="socketio-server-rooms">
-    <div class="form-row">
-        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-        <input type="text" id="node-input-name" placeholder="Name">
-    </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name">
+  </div>
 	<div class="form-row">
-        <label for="node-input-server"><i class="fa fa-tag"></i> Server</label>
-        <input type="text" id="node-input-server">
-    </div>
-
+    <label for="node-input-server"><i class="fa fa-tag"></i> Server</label>
+    <input type="text" id="node-input-server">
+  </div>
+  <div class="form-row">
+    <label for="node-input-namespace"><i class="fa fa-tag"></i> Namespace</label>
+    <input type="text" id="node-input-namespace" placeholder="Namespace">
+  </div>
 </script>
 
 <script type="text/x-red" data-help-name="socketio-server-rooms">

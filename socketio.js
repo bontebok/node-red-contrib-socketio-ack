@@ -42,10 +42,6 @@ module.exports = function(RED) {
     this.corsMethods = n.corsMethods.toUpperCase().split(",") || "GET,POST";
     this.enableCors = n.enableCors || false;
 
-    node.log("socketIoConfig - CORS METHODS " + JSON.stringify(this.corsMethods));
-    node.log("socketIoConfig - CORS ORIGINS " + JSON.stringify(this.corsOrigins));
-    node.log("socketIoConfig - CORS METHODS " + JSON.stringify(this.enableCors));
-
     let corsOptions = {};
 
     if (this.enableCors) {
@@ -92,8 +88,10 @@ module.exports = function(RED) {
     this.server = RED.nodes.getNode(n.server);
     this.rules = n.rules || [];
     this.io = io[n.server];
+    this.namespace = n.namespace || "/";
 
-    this.io.server.on("connection", (socket) => {
+    node.log("Namespace: " + this.namespace);
+    this.io.server.of(this.namespace).on("connection", (socket) => {
       //console.log(socket.id);
       //console.log(this.io.sockets);
       this.io.sockets[socket.id] = socket;
@@ -109,7 +107,9 @@ module.exports = function(RED) {
     this.name = n.name;
     this.server = RED.nodes.getNode(n.server);
     this.io = io[n.server];
+    this.namespace = n.namespace || "/";
 
+    node.log("Namespace: " + this.namespace);
     node.on("input", function(msg) {
       this.payload = (msg.payload instanceof Array) ? msg.payload : [msg.payload];
       if (n.callback) {
@@ -148,28 +148,27 @@ module.exports = function(RED) {
       switch (RED.util.getMessageProperty(msg, "socketIOEmit")) {
         case "broadcast.emit":
           //Return to all but the caller
-          if (this.io.server.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
-            this.io.server.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId")).broadcast.emit(
+          if (this.io.server.of(this.namespace).sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
+            this.io.server.of(this.namespace).sockets.get(RED.util.getMessageProperty(msg, "socketIOId")).broadcast.emit(
               msg.socketIOEvent, ...this.payload);
-
           }
           break;
         case "emit":
           //Return only to the caller
-          if (this.io.server.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
-            this.io.server.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId")).emit(
+          if (this.io.server.of(this.namespace).sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
+            this.io.server.of(this.namespace).sockets.get(RED.util.getMessageProperty(msg, "socketIOId")).emit(
               msg.socketIOEvent, ...this.payload);
           }
           break;
         case "room":
           //emit to all
           if (msg.room) {
-            this.io.server.to(msg.room).emit(msg.socketIOEvent, ...this.payload);
+            this.io.server.of(this.namespace).to(msg.room).emit(msg.socketIOEvent, ...this.payload);
           }
           break;
         default:
           //emit to all
-            this.io.server.emit(msg.socketIOEvent, ...this.payload);
+            this.io.server.of(this.namespace).emit(msg.socketIOEvent, ...this.payload);
       }
     });
   }
@@ -179,18 +178,20 @@ module.exports = function(RED) {
     var node = this;
     this.server = RED.nodes.getNode(n.server);
     this.io = io[n.server];
+    this.namespace = n.namespace || "/";
 
-    this.io.server.on("connection", (socket) => {
+    node.log("Namespace: " + this.namespace);
+    this.io.server.of(this.namespace).on("connection", (socket) => {
       let msg = {};
-      node.status({ fill: 'green', shape: 'dot', text: this.io.server.sockets.sockets.size + ' connected' });
+      node.status({ fill: 'green', shape: 'dot', text: this.io.server.of(this.namespace).sockets.size + ' connected' });
       RED.util.setMessageProperty(msg, "socketIOEvent", "connected", true);
       RED.util.setMessageProperty(msg, "socketIOId", socket.id, true);
       node.send(msg);
       socket.on("disconnect", (reason) => {
-        if (this.io.server.sockets.sockets.size)
-          node.status({ fill: 'green', shape: 'dot', text: this.io.server.sockets.sockets.size + ' connected' });
+        if (this.io.server.of(this.namespace).sockets.size)
+          node.status({ fill: 'green', shape: 'dot', text: this.io.server.of(this.namespace).sockets.size + ' connected' });
         else {
-          node.status({ fill: 'red', shape: 'dot', text: this.io.server.sockets.sockets.size + ' connected' });
+          node.status({ fill: 'red', shape: 'dot', text: this.io.server.of(this.namespace).sockets.size + ' connected' });
         }
         RED.util.setMessageProperty(msg, "socketIOEvent", "disconnected", true);
         node.send(msg);
@@ -205,10 +206,11 @@ module.exports = function(RED) {
     this.name = n.name;
     this.server = RED.nodes.getNode(n.server);
     this.io = io[n.server];
+    this.namespace = n.namespace || "/";
 
     node.on("input", function(msg) {
-      if (io.server.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
-        io.server.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId")).join(
+      if (io.server.of(this.namespace).sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
+        io.server.of(this.namespace).sockets.get(RED.util.getMessageProperty(msg, "socketIOId")).join(
           msg.payload.room
         );
         node.send(msg);
@@ -222,9 +224,10 @@ module.exports = function(RED) {
     this.name = n.name;
     this.server = RED.nodes.getNode(n.server);
     this.io = io[n.server];
+    this.namespace = n.namespace || "/";
 
     node.on("input", function(msg) {
-      node.send({ payload: this.io.server.sockets.adapter.rooms });
+      node.send({ payload: this.io.server.of(this.namespace).adapter.rooms });
     });
   }
 
@@ -234,10 +237,11 @@ module.exports = function(RED) {
     this.name = n.name;
     this.server = RED.nodes.getNode(n.server);
     this.io = io[n.server];
+    this.namespace = n.namespace || "/";
 
     node.on("input", function(msg) {
-      if (this.io.server.sockets.sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
-        this.io.server.sockets.sockets.get(
+      if (this.io.server.of(this.namespace).sockets.get(RED.util.getMessageProperty(msg, "socketIOId"))) {
+        this.io.server.of(this.namespace).sockets.get(
           RED.util.getMessageProperty(msg, "socketIOId")
         ).leave(msg.payload.room);
       }
